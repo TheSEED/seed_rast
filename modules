@@ -1,3 +1,5 @@
+svr_condense_repeats.pl
+svr_big_repeats.pl
 rast_annotate_proteins_similarity.pl
 rast_call_CDSs_using_prodigal.pl
 rast_call_crisprs.pl
