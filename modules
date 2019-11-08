@@ -22,3 +22,6 @@ pyrrolysylprotein_ref_seq.pm
 OddStarts_ref.pm
 overlap_resolution.pm
 find_special_proteins.pm
+RNA_reps_5S_rRNA.pm
+RNA_reps_LSU_rRNA.pm
+RNA_reps_SSU_rRNA.pm
