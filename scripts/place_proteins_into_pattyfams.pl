@@ -217,7 +217,7 @@ while (<P>)
     my $bsscore = $gscore{$byscore[0]} - $gscore{$byscore[1]};
 
     # print STDERR Dumper(\%gcount, \%gscore, \@bycount, \@byscore);
-    # print STDERR Dumper(\%lcount, \%lscore, \@lbycount, \@lbyscore);
+    # print STDERR Dumper($lbsscore, \%lcount, \%lscore, \@lbycount, \@lbyscore);
 
     if ($file_type eq 'fasta')
     {
@@ -233,7 +233,7 @@ while (<P>)
 	    my $assign = ["PGFAM", $byscore[0], $this_call, $vers{families}, $bsscore];
 	    push(@{$feat->{family_assignments}}, $assign);
 	}
-	if ($lbyscore[0] & $lbsscore > 0)
+	if ($lbyscore[0] && $lbsscore > 0)
 	{
 	    my $lassign = ["PLFAM", $lbyscore[0], $this_call, $vers{families}];
 	    push(@{$feat->{family_assignments}}, $lassign, $lbsscore);
