@@ -236,7 +236,7 @@ while (<P>)
 	if ($lbyscore[0] && $lbsscore > 0)
 	{
 	    my $lassign = ["PLFAM", $lbyscore[0], $this_call, $vers{families}];
-	    push(@{$feat->{family_assignments}}, $lassign, $lbsscore);
+	    push(@{$feat->{family_assignments}}, $lassign);
 	}
     }
 }
