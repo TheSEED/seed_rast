@@ -213,7 +213,7 @@ if ($opt->allow_rebuild && $dataD && ! -s "$dataD/final.kmers")
 # The size file is written by km_build_Data.
 #
 
-if ($dataD && ! -s "$dataD/kmer.table.mem_map")
+if (!$opt->url && $dataD && ! -s "$dataD/kmer.table.mem_map")
 {
     if (!$opt->allow_rebuild)
     {
