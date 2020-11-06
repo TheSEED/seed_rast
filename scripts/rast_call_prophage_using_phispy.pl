@@ -57,6 +57,12 @@ if ($genomeTO->{domain} !~ m/^([ABV])/o) {
     die "Invalid domain: \"$genomeTO->{domain}\"";
 }
 
+my $gto_file = File::Temp->new(UNLINK => 1);
+close($gto_file);
+$genomeTO->destroy_to_file("$gto_file");
+
+$genomeTO = GenomeTypeObject->create_from_file("$gto_file");
+
 
 my $id_client;
 if ($id_server)
@@ -68,65 +74,62 @@ else
     $id_client = IDclient->new($genomeTO);
 }
 
-$genomeTO = GenomeTypeObject->initialize($genomeTO);
-my $seed_dir = $genomeTO->write_temp_seed_dir({ map_CDS_to_peg => 1 });
+my $gb_file = File::Temp->new(UNLINK => 1);
+close($gb_file);
 
-#
-# Find our KBase top. In a hacked SEED environment KB_RUNTIME might not be set so find it based on
-# where all_entities_Genome is found.
-#
+$rc = system("rast_export_genome", "-i", "$gto_file", "-o", "$gb_file", "genbank");
+die "Failed exporting genome: rc=$rc\n" unless $rc == 0;
 
-my $runtime = $ENV{KB_RUNTIME};
-if (!$runtime)
-{
-    for my $p (split(/:/, $ENV{PATH}))
-    {
-	if (-d "$p/../phispy")
-	{
-	    $runtime = dirname($p);
-	    last;
-	}
-    }
-    $ENV{R_LIBS} = "$runtime/lib/R/library" if $runtime;
-}
-if (!$runtime)
-{
-    $runtime = "/vol/kbase/runtime";
-    $ENV{R_LIBS} = "$runtime/lib/R/library";
-}
+my $phispy = "PhiSpy.py";
 
-if (! -d $runtime)
-{
-    die "Cannot find KB runtime\n";
-}
-my $phispy = "$runtime/phispy";
-
-my $sci = $genomeTO->{scientific_name};
+my $sci = $genomeTO->{scientific_name} // "";
 
 my $training_set;
 my $default_training_set;
-open(T, "<", "$phispy/data/trainingGenome_list.txt") or die "Cannot open $phispy/data/trainingGenome_list.txt: $!";
+
+# PhiSpy.py -l long | cat
+# Training Set	# of genomes used
+# data/testSet_genericAll.txt	48
+# - Generic Test Set
+# data/trainSet_122586.26.txt	1
+# - Neisseria_meningitidis_MC58.gb.gz
+# data/trainSet_122587.18.txt	1
+# - Neisseria_meningitidis_Z2491.gb.gz
+# data/trainSet_1280.10152.txt	1
+
+
+open(T, "$phispy -l long 2>&1 |") or die "Cannot list training datasets: $!";
+my $cur;
 while (<T>)
 {
     chomp;
-    my($id, $file, $genome, $mult) = split(/\t/);
-    if ($genome eq 'Generic Test Set')
+    if (/^(data\S+)/)
     {
-	$default_training_set = $id;
+	$cur = $1;
+	next;
     }
-    if ($sci =~ /^$genome\b/)
+    if (/^-\s+(.*)(\.gb\.gz)?$/)
     {
-	$training_set = $id;
-	last;
+	my $n = $1;
+	$n =~ s/_/ /g;
+
+	# print "$cur: $n\n";
+	if ($sci =~ /^$n\b/)
+	{
+	    $training_set = $cur;
+	    last;
+	}
+
     }
 }
-$training_set = $default_training_set unless defined($training_set);
+close(T);
 
 my $out = File::Temp->newdir(undef, CLEANUP => 1);
 
-$ENV{PATH} = "$runtime/bin:$ENV{PATH}";
-
-my @cmd = ("$runtime/bin/python", "$phispy/phiSpy.py", "-i", "" . $seed_dir, "-o", "" . $out, "-t", $training_set);
+my @cmd = ($phispy,
+	   "-o", "" . $out,
+	   (defined($training_set) ? ("-t", $training_set) : ()),
+	   "$gb_file");
 my $cmd = "@cmd > $out/phispy.stdout 2> $out/phispy.stderr";
 print STDERR "Run $cmd\n";
 $rc = system($cmd);
@@ -152,14 +155,26 @@ my $event = {
 };
 my $event_id = &GenomeTypeObject::add_analysis_event($genomeTO, $event);
 
-if (open(O, "<", "$out/prophage.tbl"))
+# The columns of the file are:
+#   - 1. Prophage number
+#   - 2. The contig upon which the prophage resides
+#   - 3. The start location of the prophage
+#   - 4. The stop location of the prophage
+# If we can detect the _att_ sites, the additional columns are:
+#   - 11. start of _attL_;
+#   - 12. end of _attL_;
+#   - 13. start of _attR_;
+#   - 14. end of _attR_;
+#   - 15. sequence of _attL_;
+#   - 16. sequence of _attR_;
+#   - 17. The explanation of why this _att_ site was chosen for this prophage.
+
+if (open(O, "<", "$out/prophage_coordinates.tsv"))
 {
     while (<O>)
     {
 	chomp;
-	my($xid, $loc) = split(/\t/);
-	
-	my($contig, $beg, $end) = $loc =~ /^(\S+)_(\d+)_(\d+)$/;
+	my($xid, $contig, $beg, $end) = split(/\t/);
 	
 	my $len = $end - $beg + 1;
 	if ($contig)
