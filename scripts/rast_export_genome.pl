@@ -54,6 +54,7 @@ my($opt, $usage) = describe_options("%c %o format",
 				    ["feature-type=s@", 'Select a feature type to dump'],
 				    ["input|i=s", "Input file"],
 				    ["output|o=s", "Output file"],
+				    ["genbank-roundtrip", "For features that have genbank types, output those"],
 				    ["with-headings", "For downloads with optional headings (feature_data) include headings"],
 				    ["specialty-gene-lookup-db=s", "Use this reference database for exporting spgene data"],
 				    ["help|h", "Show this help message"],
@@ -310,7 +311,7 @@ else
 #
 $format = 'genbank' if $format eq 'genbank_merged';
 
-my %protein_type = (CDS => 1, peg => 1);
+my %protein_type = (CDS => 1, peg => 1, mat_peptide => 1);
 my $strip_ec;
 my $gff_export = [];
 
@@ -409,8 +410,9 @@ for my $f (@{$genomeTO->{features}})
     
     if ($protein_type{$f->{type}})
     {
+	my $type = $opt->genbank_roundtrip ? ($f->{genbank_type} // $f->{type}) : 'CDS';
 	$feature = Bio::SeqFeature::Generic->new(-location => $loc,
-						 -primary  => 'CDS',
+						 -primary  => $type,
 						 -tag      => {
 						     product     => $func_ok,
 						     translation => $f->{protein_translation},
