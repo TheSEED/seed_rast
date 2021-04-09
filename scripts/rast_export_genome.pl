@@ -171,6 +171,16 @@ my %contig_offset;
 
 my $species;
 my @tax = split(/;\s+/, $genomeTO->{taxonomy});
+
+if (@tax == 0)
+{
+    #
+    # If we have a NCBI lineage structure, use that for taxonomy.
+    #
+    my $lin = $genomeTO->{ncbi_lineage} // [];
+    @tax = map { $_->[0] } @$lin;
+}
+
 #
 # To avoid issues with EMBL exports on long taxonomies, truncate
 # any field in the taxonomy to 74 chars.
