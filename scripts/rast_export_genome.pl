@@ -57,6 +57,7 @@ my($opt, $usage) = describe_options("%c %o format",
 				    ["genbank-roundtrip", "For features that have genbank types, output those"],
 				    ["with-headings", "For downloads with optional headings (feature_data) include headings"],
 				    ["specialty-gene-lookup-db=s", "Use this reference database for exporting spgene data"],
+				    ["emit-contig-ids", "In generated data, use contig ids instead of accessions"],
 				    ["help|h", "Show this help message"],
 				    [],
 				    ["Supported formats:\n"],
@@ -109,6 +110,16 @@ for my $f (@{$genomeTO->{features}})
 	$f->{function} = "hypothetical protein";
     }
 }
+
+#
+# Compute sequence ID to accession map.
+#
+my %seq_to_accession;
+for my $ctg (@{$genomeTO->{contigs}})
+{
+    $seq_to_accession{$ctg->{id}} = id_for_contig($ctg);
+}
+
 
 #
 # Simple exports.
@@ -170,7 +181,17 @@ my $offset = 0;
 my %contig_offset;
 
 my $species;
-my @tax = split(/;\s+/, $genomeTO->{taxonomy});
+my @tax;
+
+# Noncompliant GTO
+if (ref($genomeTO->{taxonomy}))
+{
+    @tax = @{$genomeTO->{taxonomy}};
+}
+else
+{
+    @tax = split(/;\s+/, $genomeTO->{taxonomy});
+}
 
 if (@tax == 0)
 {
@@ -223,7 +244,7 @@ if ($format eq 'genbank_merged')
     my @feats;
     for my $c (@{$genomeTO->{contigs}})
     {
-	my $contig = $c->{id};
+	my $contig = id_for_contig($c);
 	$dna .= $c->{dna};
 	
 	my $contig_start = $offset + 1;
@@ -255,13 +276,13 @@ if ($format eq 'genbank_merged')
     }
     my $bseq = Bio::Seq::RichSeq->new(-id => $genome,
 				      -display_name => $gs,
-				      -accession_number => $genomeTO->{contigs}->[0]->{id},
+				      -accession_number => id_for_contig($genomeTO->{contigs}->[0]),
 				      (defined($species) ? (-species => $species) : ()),
 				      -seq => $dna);
 
     for my $c (@{$genomeTO->{contigs}})
     {
-	my $contig = $c->{id};
+	my $contig = id_for_contig($c);
 	$bio->{$contig} = $bseq;
     }
 
@@ -272,7 +293,7 @@ else
 {
     for my $c (@{$genomeTO->{contigs}})
     {
-	my $contig = $c->{id};
+	my $contig = id_for_contig($c);
 	$bio->{$contig} = Bio::Seq::RichSeq->new(-id => $contig,
 						 -display_name => $gs,
 						 -accession_number => $contig,
@@ -393,7 +414,12 @@ for my $f (@{$genomeTO->{features}})
 	# Compute loc_info for GFF stuff.
 	#
 	my $frame = $start % 3;
-	push(@loc_info, [$ctg, $start, $end, (($len == 0) ? "." : $strand), $frame]);
+
+	#
+	# If we are mapping contig ids to accessions, we need to look up the accession here.
+	#
+	my $nctg = maybe_accession_of($ctg, $genomeTO);
+	push(@loc_info, [$nctg, $start, $end, (($len == 0) ? "." : $strand), $frame]);
     }
 
     if (@loc_obj == 1)
@@ -417,7 +443,7 @@ for my $f (@{$genomeTO->{features}})
 	$func_ok =~ s/\s+\(EC \d+\.(\d+|-)\.(\d+|-)\.(\d+|-)\)//g;
 	$func_ok =~ s/\s+\(TC \d+\.(\d+|-)\.(\d+|-)\.(\d+|-)\)//g;
     }
-    
+
     if ($protein_type{$f->{type}})
     {
 	my $type = $opt->genbank_roundtrip ? ($f->{genbank_type} // $f->{type}) : 'CDS';
@@ -532,7 +558,8 @@ for my $f (@{$genomeTO->{features}})
 	
 
     }
-    
+
+    $contig = maybe_accession_of($contig);
     my $bc = $bio->{$contig};
     if (ref($bc))
     {
@@ -613,7 +640,7 @@ sub export_contig_fasta
 
     for my $c (@{$genomeTO->{contigs}})
     {
-	my $contig = $c->{id};
+	my $contig = id_for_contig($c);
 	print_alignment_as_fasta($out_fh, [$contig, undef, $c->{dna}]);
     }
 }
@@ -1032,4 +1059,30 @@ sub getGenomeInfo
     return $genome;
 }
 
+#
+# Use the --emit-contig-ids parameter to determine if we
+# use the sequence_id (aka id field) or accession (aka original_id)
+# field (if it exists) when emitting contig identifiers.
+#
+sub id_for_contig
+{
+    my($ctg) = @_;
+    if ($opt->emit_contig_ids)
+    {
+	return $ctg->{id};
+    }
+    else
+    {
+	return $ctg->{original_id} // $ctg->{id};
+    }
+}
 
+#
+# In the case where we are emitting accessions, need
+# to map the given sequence ID to an accession.
+#
+sub maybe_accession_of
+{
+    my($id, $gto) = @_;
+    return $seq_to_accession{$id};
+}
