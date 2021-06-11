@@ -346,6 +346,8 @@ my %protein_type = (CDS => 1, peg => 1, mat_peptide => 1);
 my $strip_ec;
 my $gff_export = [];
 
+my $anno_source = $genomeTO->{source} // "RAST2";
+
 my @features;
 for my $f (@{$genomeTO->{features}})
 {
@@ -364,7 +366,7 @@ for my $f (@{$genomeTO->{features}})
 	$func = "hypothetical protein";
     }
 
-    push @{$note->{db_xref}}, "RAST2:$peg";
+    push @{$note->{db_xref}}, "$anno_source:$peg";
 
     my %ecs;
     if ($func)
