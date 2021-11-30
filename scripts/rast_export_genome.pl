@@ -476,7 +476,9 @@ for my $f (@{$genomeTO->{features}})
 		$ec = ";Ontology_term=".join(',', map { "KEGG_ENZYME:" . $_ } @ecs);
 	    }
 	    my($contig, $start, $stop, $strand, $frame) = @$l;
-	    push @$gff_export, "$contig\t$source\tCDS\t$start\t$stop\t.\t$strand\t$frame\tID=".$peg.";Name=".$func_ok.$ec."\n";
+	    # for bacterial genomes phase=0
+	    my $phase = 0;
+	    push @$gff_export, "$contig\t$source\tCDS\t$start\t$stop\t.\t$strand\t$phase\tID=".$peg.";Name=".$func_ok.$ec."\n";
 	}
     } elsif ($type eq "rna") {
 	my $primary;
