@@ -632,9 +632,12 @@ sub export_feature_dna
     {
 	next unless &$feature_type_ok($f);
 	my $id = $f->{id};
-	print_alignment_as_fasta($out_fh, [$id,
-					   "$f->{function} [$genomeTO->{scientific_name} | $genomeTO->{id}]",
-					   $genomeTO->get_feature_dna($id)]);
+	if (my $dna = $genomeTO->get_feature_dna($id))
+	{
+	    print_alignment_as_fasta($out_fh, [$id,
+					       "$f->{function} [$genomeTO->{scientific_name} | $genomeTO->{id}]",
+					       $dna]);
+	}
     }
 }
 
