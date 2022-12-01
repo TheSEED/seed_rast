@@ -1,20 +1,21 @@
 use strict;
 use Data::Dumper;
 
-use Getopt::Long;
+use Getopt::Long::Descriptive;
 my $no_scores = 0;
 
-my $usage = "usage: km_pick_best_hit_in_peg [-n]\n";
+my($opt, $usage) = describe_options("%c %o",
+				    ["no-scores|n", "Do not write scores"],
+				    ["help|h "=> "Show this help message"]);
+print($usage->text), exit if $opt->help;
+print($usage->text), exit 1 if (@ARGV != 0);
 
-my $rc  = GetOptions('n'   => \$no_scores);
-if (! $rc)
-{ 
-    print STDERR $usage; exit ;
-}
+my $usage = "usage: km_pick_best_hit_in_peg [-n]\n";
 
 use SeedUtils;
 while (defined($_ = <STDIN>) && ($_ ne "---------------------\n")) { }
 my $last = <STDIN>;
+my %seen;
 while ($last && ($last =~ /^(\S+)/))
 {
     my $peg = $1;
@@ -42,7 +43,7 @@ while ($last && ($last =~ /^(\S+)/))
     my @funcs = sort { $funcsW{$b} <=> $funcsW{$a} } keys(%funcs);
     my $best_func = $funcs[0];
 
-    if ($no_scores)
+    if ($opt->no_scores)
     {
 	print "$peg\t$best_func\n";
     }
