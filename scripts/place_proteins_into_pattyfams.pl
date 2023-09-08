@@ -150,9 +150,9 @@ close($assigns_fh) if $assigns_fh;
 close(CALLS);
 $h->finish;
 
-
-open(P, "-|", "curl", "--data-binary", "\@$fasta_data", "$url/lookup")
-   or die "Cannot curl $url/lookup: $!";
+my @lookup = ("curl", "--fail", "--data-binary", "\@$fasta_data", "$url/lookup");
+open(P, "-|", @lookup)
+   or die "Cannot lookup with @lookup: $!";
 
 my $genus_re = genus_re($genus) if $genus;
 # print Dumper($genus, $genus_re);
@@ -239,6 +239,12 @@ while (<P>)
 	    push(@{$feat->{family_assignments}}, $lassign);
 	}
     }
+}
+
+my $rc = close(P);
+if (!$rc)
+{
+    die "Error $rc on retrieving family data with @lookup\n";
 }
 
 if ($file_type eq 'gto')
