@@ -109,6 +109,8 @@ use strict;
 use Data::Dumper;
 use SeedUtils;
 use Getopt::Long::Descriptive;
+use IO::Handle;
+use IPC::Run;
 
 $| = 1;
 
@@ -239,8 +241,8 @@ if (!$opt->url && $dataD && ! -s "$dataD/kmer.table.mem_map")
 
 push(@kmer_guts_params, "-a") if $aa;
 
-my $command;
-my($dbg_1, $dbg_2);
+my @command;
+my(@dbg_1, @dbg_2);
 my $z = $zscores ? '-z' : '';
 if ($search_type eq 'genomes')
 {
@@ -248,28 +250,48 @@ if ($search_type eq 'genomes')
     {
 	if ($opt->debug)
 	{
-	    $dbg_1 = "$kmer_guts -d 1 @kmer_guts_params";
-	    $dbg_2 = "km_process_hits_to_regions -a -d $dataD $z | km_pick_best_hit_in_peg";
+	    @dbg_1 = ([$kmer_guts, "-d", "1", @kmer_guts_params]);
+	    @dbg_2 = (["km_process_hits_to_regions", "-a", "-d", $dataD, $z],
+		      "|",
+		      ["km_pick_best_hit_in_peg"]);
+	    
+	    # $dbg_1 = "$kmer_guts -d 1 @kmer_guts_params";
+	    # $dbg_2 = "km_process_hits_to_regions -a -d $dataD $z | km_pick_best_hit_in_peg";
 	}
 	else
 	{
-	    $command = "$kmer_guts @kmer_guts_params | km_process_hits_to_regions -a -d $dataD $z | km_pick_best_hit_in_peg";
+	    @command = ([$kmer_guts, @kmer_guts_params],
+			"|",
+			["km_process_hits_to_regions", "-a", "-d", $dataD, "$z"],
+			"|",
+			["km_pick_best_hit_in_peg"]);
+	    # $command = "$kmer_guts @kmer_guts_params | km_process_hits_to_regions -a -d $dataD $z | km_pick_best_hit_in_peg";
 	}
     }
     else
     {
-	$command = "$kmer_guts @kmer_guts_params | km_process_hits_to_regions -d $dataD $z";
+	@command = ([$kmer_guts, @kmer_guts_params],
+		    "|",
+		    ["km_process_hits_to_regions", "-d", $dataD, "$z"]);
+	
+	# $command = "$kmer_guts @kmer_guts_params | km_process_hits_to_regions -d $dataD $z";
     }
 }
 elsif ($search_type eq 'properties')
 {
     if ($aa)
     {
-	$command = "$kmer_guts @kmer_guts_params | kp_process_hits -d $dataD";
+	@command = ([$kmer_guts, @kmer_guts_params],
+		    "|",
+		    ["kp_process_hits", "-d", $dataD]);
+	#$command = "$kmer_guts @kmer_guts_params | kp_process_hits -d $dataD";
     }
     else
     {
-	$command = "$kmer_guts @kmer_guts_params | kp_process_dna_hits -d $dataD";
+	@command = ([$kmer_guts, @kmer_guts_params],
+		    "|",
+		    ["kp_process_dna_hits", "-d", $dataD]);
+	# $command = "$kmer_guts @kmer_guts_params | kp_process_dna_hits -d $dataD";
     }
 }
 else
@@ -291,13 +313,15 @@ if (!$opt->debug)
 {
     if ($opt->output)
     {
-	$command .= " > '" . $opt->output . "'";
+	push(@command, ">", $opt->output);
+	#$command .= " > '" . $opt->output . "'";
     }
-    my $rc = system($command);
-    if ($rc != 0)
+    # print STDERR Dumper(\@command);
+    my $ok = IPC::Run::run(@command);
+    if (!$ok)
     {
-	print STDERR "Command failed with rc=$rc: $command\n";
-	exit $rc;
+	print STDERR "Command failed: " . Dumper(\@command);
+	exit 1;
     }
     exit;
 }
@@ -318,10 +342,12 @@ close(FI);
 
 my @prot_alpha = ('A','C','D','E','F','G','H','I','K','L','M','N','P','Q','R','S','T','V','W','Y');
 
-open(P1, "$dbg_1 |") or die "Cannot open pipe 1 $dbg_1: $!";
-open(P2, "| $dbg_2") or die "Cannot open pipe 2 $dbg_2: $!";
+
+my $p1 = IO::Handle->new;
+my $p2 = IO::Handle->new;
 
 my $out_fh;
+
 if ($opt->output)
 {
     open($out_fh, ">", $opt->output) or die "Cannot write " . $opt->output . ": $!";
@@ -331,8 +357,14 @@ else
     $out_fh = *STDOUT;
 }
 
+my $h1 = IPC::Run::start(@dbg_1, ">pipe", $p1);
+my $d2_first = shift @dbg_2;
+my $h2 = IPC::Run::start($d2_first, "<pipe", $p2, @dbg_2);
+#open(P1, "$dbg_1 |") or die "Cannot open pipe 1 $dbg_1: $!";
+#open(P2, "| $dbg_2") or die "Cannot open pipe 2 $dbg_2: $!";
+
 my $cur;
-while (<P1>)
+while (<$p1>)
 {
     my $orig = $_;
     chomp;
@@ -340,12 +372,12 @@ while (<P1>)
     if ($key eq 'PROTEIN-ID')
     {
 	$cur = $parts[0];
-	print P2 $orig;
+	print $p2 $orig;
 	print $out_fh $orig;
     }
     elsif ($key eq 'CALL' || $key eq 'OTU-COUNTS')
     {
-	print P2 $orig;
+	print $p2 $orig;
 	print $out_fh $orig;
     }
     elsif ($key eq 'HIT')
@@ -356,6 +388,12 @@ while (<P1>)
 	print $out_fh join("\t", $key, $dec, $loc, $func), "\n";
     }
 }
+close($p1);
+close($p2);
+
+$h1->finish();
+
+$h2->finish();
 
 
 sub decode_kmer
