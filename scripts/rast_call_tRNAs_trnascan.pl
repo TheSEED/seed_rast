@@ -140,7 +140,7 @@ my @cmd = ("tRNAscan-SE", $dflag,
 	   "-m", "$scan_stats",
 	   "-l", "$scan_log",
 	   "-Q",
-	   "-b",
+	   "--brief",
 	   "$contigs_tmp");
 
 my $hostname = `hostname`;
