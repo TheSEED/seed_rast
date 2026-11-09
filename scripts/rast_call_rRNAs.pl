@@ -156,6 +156,7 @@ if ($output_file) {
 my $json = JSON::XS->new;
 
 my $genomeTO = GenomeTypeObject->create_from_file($in_fh);
+print STDERR "Created GTO ", Dumper($genomeTO);
 close($in_fh) if $input_file;
 
 # if ($genomeTO->{domain} !~ m/^([ABV])/o) {
@@ -215,6 +216,7 @@ foreach my $module ( @modules )
 	parameters => [ map { $_, $params->{$_} } qw(coverage descript extrapol ftrtype identity loc_format maxsplit seedexp tag)],
 	hostname => $hostname,
     };
+    print STDERR Dumper(AddEvent => $genomeTO);
     my $event_id = &GenomeTypeObject::add_analysis_event($genomeTO, $event);
 
     my @instances = find_homologs::find_nucleotide_homologs( $contigs, $params );
